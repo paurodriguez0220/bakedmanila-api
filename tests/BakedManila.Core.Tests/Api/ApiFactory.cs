@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace BakedManila.Core.Tests.Api;
 
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public sealed class ApiFactory(Action<IWebHostBuilder>? configureHost = null) : WebApplicationFactory<Program>
 {
     private readonly string _connectionString = TestDb.NewConnectionString();
 
@@ -19,6 +19,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-bakedmanila-0123456789abcdef0123456789abcdef");
         builder.UseSetting("Jwt:Issuer", "BakedManila");
         builder.UseSetting("Jwt:Audience", "BakedManila");
+        configureHost?.Invoke(builder);
     }
 
     public async Task<BakedManilaDbContext> CreateDbAsync()

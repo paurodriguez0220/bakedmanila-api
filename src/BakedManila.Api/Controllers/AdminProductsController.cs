@@ -2,6 +2,7 @@ using BakedManila.Api.Dtos;
 using BakedManila.Core.Domain;
 using BakedManila.Core.Domain.Exceptions;
 using BakedManila.Core.Repositories;
+using BakedManila.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,8 +14,12 @@ namespace BakedManila.Api.Controllers;
 public sealed class AdminProductsController(
     IProductRepository products,
     TimeProvider time,
-    IConfiguration config) : ControllerBase
+    IConfiguration config,
+    IImageStore images,
+    ILogger<AdminProductsController> logger) : ControllerBase
 {
+    private const long MaxImageBytes = 5 * 1024 * 1024;
+
     private string ImageBaseUrl => config["Storage:PublicBaseUrl"] ?? string.Empty;
 
     [HttpGet]
@@ -87,6 +92,63 @@ public sealed class AdminProductsController(
         product.IsDeleted = true;
         product.UpdatedAt = time.GetUtcNow().UtcDateTime;
         await products.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/images")]
+    public async Task<ActionResult<ProductImageAdminDto>> UploadImage(int id, IFormFile file, CancellationToken ct)
+    {
+        var product = await products.GetByIdAsync(id, ct);
+        if (product is null)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Product not found");
+        }
+        if (!ImageContentTypes.TryGetExtension(file.ContentType, out _))
+        {
+            return Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
+                title: "Unsupported image type", detail: "Use JPEG, PNG, or WebP.");
+        }
+        if (file.Length is 0 or > MaxImageBytes)
+        {
+            return Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
+                title: "Invalid image size", detail: "Images must be between 1 byte and 5 MB.");
+        }
+
+        await using var stream = file.OpenReadStream();
+        var blobName = await images.SaveAsync(stream, file.ContentType, id, ct); // store first — orphan blobs are harmless
+        var image = new ProductImage
+        {
+            ProductId = id,
+            BlobName = blobName,
+            SortOrder = product.Images.Count == 0 ? 1 : product.Images.Max(i => i.SortOrder) + 1,
+        };
+        product.Images.Add(image);
+        await products.SaveChangesAsync(ct);
+
+        return CreatedAtAction(nameof(List), null,
+            new ProductImageAdminDto(image.Id, $"{ImageBaseUrl}/{image.BlobName}", image.SortOrder));
+    }
+
+    [HttpDelete("{id:int}/images/{imageId:int}")]
+    public async Task<IActionResult> DeleteImage(int id, int imageId, CancellationToken ct)
+    {
+        var product = await products.GetByIdAsync(id, ct);
+        var image = product?.Images.SingleOrDefault(i => i.Id == imageId);
+        if (product is null || image is null)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Image not found");
+        }
+
+        product.Images.Remove(image);
+        await products.SaveChangesAsync(ct);
+        try
+        {
+            await images.DeleteAsync(image.BlobName, ct);
+        }
+        catch (Exception ex) // deliberate broad catch: an orphaned stored file is harmless; a failed API call is not
+        {
+            logger.LogError(ex, "Failed to delete stored image {BlobName}", image.BlobName);
+        }
         return NoContent();
     }
 }

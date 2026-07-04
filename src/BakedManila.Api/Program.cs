@@ -1,15 +1,18 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Azure.Storage.Blobs;
 using BakedManila.Api.Auth;
 using BakedManila.Api.Data;
 using BakedManila.Api.Middleware;
+using BakedManila.Api.Services;
 using BakedManila.Core.Data;
 using BakedManila.Core.Repositories;
 using BakedManila.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -87,6 +90,21 @@ builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddSingleton(TimeProvider.System);
 
+if (builder.Configuration["Images:Provider"] == "AzureBlob")
+{
+    builder.Services.AddSingleton<IImageStore>(_ => new AzureBlobImageStore(
+        new BlobContainerClient(
+            builder.Configuration.GetConnectionString("BlobStorage")
+                ?? throw new InvalidOperationException("Missing ConnectionStrings:BlobStorage."),
+            "product-images")));
+}
+else
+{
+    var imagesRoot = builder.Configuration["Images:FileSystemRoot"]
+        ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "images");
+    builder.Services.AddSingleton<IImageStore>(_ => new FileSystemImageStore(imagesRoot));
+}
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -105,6 +123,15 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(options => options.WithTitle("BakedManila API"));
+
+    var imagesServeRoot = app.Configuration["Images:FileSystemRoot"]
+        ?? Path.Combine(app.Environment.ContentRootPath, "App_Data", "images");
+    Directory.CreateDirectory(imagesServeRoot);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(imagesServeRoot),
+        RequestPath = "/images",
+    });
 }
 
 app.MapControllers();
