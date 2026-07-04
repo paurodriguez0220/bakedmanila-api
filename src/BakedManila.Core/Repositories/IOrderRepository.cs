@@ -8,4 +8,6 @@ public interface IOrderRepository
     Task<Order?> GetByNumberAndPhoneAsync(string orderNumber, string phone, CancellationToken ct);
     Task<long> GetNextOrderSequenceAsync(CancellationToken ct);
     Task SaveChangesAsync(CancellationToken ct);
+    Task<List<Order>> GetFilteredAsync(OrderStatus? status, DateOnly? from, DateOnly? to, CancellationToken ct);
+    Task<Order?> GetByIdAsync(int id, CancellationToken ct);
 }

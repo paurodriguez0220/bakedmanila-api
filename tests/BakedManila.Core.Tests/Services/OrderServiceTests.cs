@@ -28,6 +28,10 @@ file sealed class FakeOrderRepository : IOrderRepository
         Task.FromResult(Added.FirstOrDefault(o => o.OrderNumber == orderNumber && o.Phone == phone));
     public Task<long> GetNextOrderSequenceAsync(CancellationToken ct) => Task.FromResult(++_seq);
     public Task SaveChangesAsync(CancellationToken ct) { SaveCount++; return Task.CompletedTask; }
+    public Task<List<Order>> GetFilteredAsync(OrderStatus? status, DateOnly? from, DateOnly? to, CancellationToken ct) =>
+        Task.FromResult(new List<Order>());
+    public Task<Order?> GetByIdAsync(int id, CancellationToken ct) =>
+        Task.FromResult(Added.FirstOrDefault(o => o.Id == id));
 }
 
 file sealed class RecordingNotificationSender : INotificationSender
