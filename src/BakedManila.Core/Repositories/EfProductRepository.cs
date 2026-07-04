@@ -22,4 +22,17 @@ public sealed class EfProductRepository(BakedManilaDbContext db) : IProductRepos
         db.Products
             .Where(p => slugs.Contains(p.Slug))
             .ToListAsync(ct);
+
+    public Task<List<Product>> GetAllForAdminAsync(CancellationToken ct) =>
+        db.Products.Include(p => p.Images).OrderBy(p => p.SortOrder).ToListAsync(ct);
+
+    public Task<Product?> GetByIdAsync(int id, CancellationToken ct) =>
+        db.Products.Include(p => p.Images).SingleOrDefaultAsync(p => p.Id == id, ct);
+
+    public Task<bool> SlugExistsAsync(string slug, int? exceptProductId, CancellationToken ct) =>
+        db.Products.AnyAsync(p => p.Slug == slug && (exceptProductId == null || p.Id != exceptProductId), ct);
+
+    public void Add(Product product) => db.Products.Add(product);
+
+    public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

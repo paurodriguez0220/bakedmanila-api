@@ -16,6 +16,7 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
             ProductUnavailableException => (StatusCodes.Status409Conflict, "Product unavailable"),
             InvalidStatusTransitionException => (StatusCodes.Status409Conflict, "Invalid status transition"),
             InvalidOrderException => (StatusCodes.Status422UnprocessableEntity, "Invalid order"),
+            DuplicateSlugException => (StatusCodes.Status409Conflict, "Duplicate slug"),
             _ => (0, string.Empty),
         };
         if (status == 0)

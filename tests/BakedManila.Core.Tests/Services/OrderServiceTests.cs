@@ -15,6 +15,14 @@ file sealed class FakeProductRepository(List<Product> products) : IProductReposi
         Task.FromResult(products.FirstOrDefault(p => p.Slug == slug && !p.IsDeleted));
     public Task<List<Product>> GetBySlugsAsync(IReadOnlyCollection<string> slugs, CancellationToken ct) =>
         Task.FromResult(products.Where(p => slugs.Contains(p.Slug) && !p.IsDeleted).ToList());
+    public Task<List<Product>> GetAllForAdminAsync(CancellationToken ct) =>
+        Task.FromResult(products.Where(p => !p.IsDeleted).ToList());
+    public Task<Product?> GetByIdAsync(int id, CancellationToken ct) =>
+        Task.FromResult(products.FirstOrDefault(p => p.Id == id));
+    public Task<bool> SlugExistsAsync(string slug, int? exceptProductId, CancellationToken ct) =>
+        Task.FromResult(products.Any(p => p.Slug == slug && (exceptProductId == null || p.Id != exceptProductId)));
+    public void Add(Product product) => products.Add(product);
+    public Task SaveChangesAsync(CancellationToken ct) => Task.CompletedTask;
 }
 
 file sealed class FakeOrderRepository : IOrderRepository
