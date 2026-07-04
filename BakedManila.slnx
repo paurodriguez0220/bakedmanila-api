@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BakedManila.Api/BakedManila.Api.csproj" />
+    <Project Path="src/BakedManila.Core/BakedManila.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BakedManila.Core.Tests/BakedManila.Core.Tests.csproj" />
+  </Folder>
+</Solution>
