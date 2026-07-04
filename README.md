@@ -8,8 +8,9 @@ Pragmatic layered monolith: Controllers → OrderService → Repositories → EF
 Clean Architecture/CQRS were considered and rejected per
 [standards-docs/design-patterns.md](https://github.com/paurodriguez0220/standards-docs) —
 one database, one consumer; the layers would be indirection without benefit.
-Growth seams: `IPaymentMethod` (PayMongo later), `INotificationSender` (ACS Email in Plan 2),
-`Order.CustomerId` (customer accounts later).
+Growth seams: `IPaymentMethod` (PayMongo later), `INotificationSender` (ACS Email —
+see [Admin API](#admin-api) — logging fallback until configured), `Order.CustomerId`
+(customer accounts later).
 
 Spec: `docs/superpowers/specs/2026-07-04-bakedmanila-design.md`.
 
@@ -24,6 +25,60 @@ Dev startup migrates and seeds the `BakedManila.Dev` LocalDB database.
 API docs (Development only):
 - Interactive reference (Scalar): `/scalar/v1`
 - Raw OpenAPI document: `GET /openapi/v1.json`
+
+## Admin API
+
+Admin endpoints require a JWT bearer token issued by the login endpoint.
+
+**Login**
+
+    POST /api/auth/login
+    { "email": "...", "password": "..." }
+
+Response: `{ "token": "..." }`. Dev credentials are seeded from `Admin:Email` /
+`Admin:Password` in `appsettings.Development.json` (`admin@bakedmanila.local` /
+`DevAdmin!2026`) — do not reuse these outside local development.
+
+**Endpoints** (all under `/api/admin`, `Authorize` role `Admin` unless noted):
+
+- `GET /api/admin/orders` — filtered order list (status, date range, rush)
+- `PATCH /api/admin/orders/{id}/status` — transition order status
+- `PATCH /api/admin/orders/{id}/payment` — record payment
+- `GET|POST|PUT|DELETE /api/admin/products` — product CRUD with soft delete
+- `POST /api/admin/products/{id}/images` / `DELETE /api/admin/products/{id}/images/{imageId}` —
+  upload/remove a product image (JPEG/PNG/WebP, server-generated file name, size-limited)
+
+**Image storage**
+
+`Images:Provider` selects the backing store:
+
+- `FileSystem` (default in Development) — writes under `Images:FileSystemRoot`
+  (defaults to `App_Data/images`) and serves them at `/images/*` via static files.
+  This directory is git-ignored; it's dev-only scratch data.
+- `AzureBlob` — writes to the `product-images` container using
+  `ConnectionStrings:BlobStorage`.
+
+Public URLs are built from `Storage:PublicBaseUrl`
+(`http://localhost:5127/images` in dev).
+
+**Email notifications**
+
+`Email:ConnectionString` selects the notification sender:
+
+- Empty (default) — `LoggingNotificationSender` logs the order-placed event;
+  no email is sent. This is the out-of-the-box behavior for local dev.
+- Set to an Azure Communication Services connection string — `AcsEmailNotificationSender`
+  sends a plain-text email via ACS Email using `Email:From` and `Email:To`
+  (fire-and-forget; failures are swallowed by `OrderService` so order placement
+  never fails because of email).
+
+**Authorizing in Scalar**
+
+1. Run the app and open `/scalar/v1`.
+2. Call `POST /api/auth/login` with the dev admin credentials to get a token.
+3. Click the **Auth** button (top of the Scalar UI), choose **Bearer**, and
+   paste the token.
+4. Admin requests made from Scalar will now include the `Authorization: Bearer ...` header.
 
 ## Test
 

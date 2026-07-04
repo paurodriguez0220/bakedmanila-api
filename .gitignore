@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Claude Code / Superpowers temporary directory
 .superpowers/
+
+# Dev image uploads (FileSystem image store)
+App_Data/

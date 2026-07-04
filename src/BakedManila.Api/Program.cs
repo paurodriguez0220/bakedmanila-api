@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Azure.Communication.Email;
 using Azure.Storage.Blobs;
 using BakedManila.Api.Auth;
 using BakedManila.Api.Data;
@@ -86,7 +87,18 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IProductRepository, EfProductRepository>();
 builder.Services.AddScoped<IOrderRepository, EfOrderRepository>();
 builder.Services.AddScoped<IPaymentMethod, ManualPayment>();
-builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+
+var emailConnectionString = builder.Configuration["Email:ConnectionString"];
+if (!string.IsNullOrEmpty(emailConnectionString))
+{
+    builder.Services.AddSingleton(new EmailClient(emailConnectionString));
+    builder.Services.AddScoped<INotificationSender, AcsEmailNotificationSender>();
+}
+else
+{
+    builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+}
+
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddSingleton(TimeProvider.System);
 
