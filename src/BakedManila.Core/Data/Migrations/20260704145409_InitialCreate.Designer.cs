@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BakedManila.Core.Data.Migrations
 {
     [DbContext(typeof(BakedManilaDbContext))]
-    [Migration("20260704144634_InitialCreate")]
+    [Migration("20260704145409_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -130,7 +130,7 @@ namespace BakedManila.Core.Data.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("OrderItem");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("BakedManila.Core.Domain.Product", b =>
@@ -205,7 +205,7 @@ namespace BakedManila.Core.Data.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductImage");
+                    b.ToTable("ProductImages", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

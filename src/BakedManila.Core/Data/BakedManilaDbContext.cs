@@ -42,6 +42,7 @@ public class BakedManilaDbContext(DbContextOptions<BakedManilaDbContext> options
 
         builder.Entity<ProductImage>(e =>
         {
+            e.ToTable("ProductImages");
             e.Property(i => i.BlobName).HasMaxLength(260).IsRequired();
         });
 
@@ -67,6 +68,7 @@ public class BakedManilaDbContext(DbContextOptions<BakedManilaDbContext> options
 
         builder.Entity<OrderItem>(e =>
         {
+            e.ToTable("OrderItems");
             e.Property(i => i.ProductName).HasMaxLength(100).IsRequired();
             e.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)").IsRequired();
             e.HasOne<Product>()

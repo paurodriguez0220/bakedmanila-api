@@ -127,7 +127,7 @@ namespace BakedManila.Core.Data.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("OrderItem");
+                    b.ToTable("OrderItems", (string)null);
                 });
 
             modelBuilder.Entity("BakedManila.Core.Domain.Product", b =>
@@ -202,7 +202,7 @@ namespace BakedManila.Core.Data.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductImage");
+                    b.ToTable("ProductImages", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
