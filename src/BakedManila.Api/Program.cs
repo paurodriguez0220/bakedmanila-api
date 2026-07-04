@@ -6,6 +6,7 @@ using BakedManila.Core.Data;
 using BakedManila.Core.Repositories;
 using BakedManila.Core.Services;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +61,7 @@ app.UseRateLimiter();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference(options => options.WithTitle("BakedManila API"));
 }
 
 app.MapControllers();

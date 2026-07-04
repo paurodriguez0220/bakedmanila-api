@@ -20,7 +20,10 @@ Requires .NET 10 SDK and SQL Server LocalDB (`sqllocaldb info MSSQLLocalDB`).
     dotnet run --project src/BakedManila.Api
 
 Dev startup migrates and seeds the `BakedManila.Dev` LocalDB database.
-OpenAPI: `GET /openapi/v1.json` (Development only).
+
+API docs (Development only):
+- Interactive reference (Scalar): `/scalar/v1`
+- Raw OpenAPI document: `GET /openapi/v1.json`
 
 ## Test
 
