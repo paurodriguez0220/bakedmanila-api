@@ -82,6 +82,20 @@ public sealed class AdminProductsEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
+    [Fact]
+    public async Task Create_Returns409_ForSlugOfSoftDeletedProduct()
+    {
+        var created = await _client.PostAsJsonAsync("/api/admin/products", ValidProduct("reused-slug"));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var product = await created.Content.ReadFromJsonAsync<AdminProductDto>();
+
+        var deleted = await _client.DeleteAsync($"/api/admin/products/{product!.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        var second = await _client.PostAsJsonAsync("/api/admin/products", ValidProduct("reused-slug"));
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
     [Theory]
     [InlineData("Bad Slug!")]
     [InlineData("UPPER")]

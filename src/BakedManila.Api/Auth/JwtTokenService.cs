@@ -12,8 +12,11 @@ public sealed class JwtTokenService(IConfiguration config, TimeProvider time)
 
     public (string Token, DateTime ExpiresAtUtc) CreateToken(IdentityUser user, IList<string> roles)
     {
-        var signingKey = config["Jwt:SigningKey"]
-            ?? throw new InvalidOperationException("Missing Jwt:SigningKey configuration.");
+        var signingKey = config["Jwt:SigningKey"];
+        if (string.IsNullOrEmpty(signingKey))
+        {
+            throw new InvalidOperationException("Missing Jwt:SigningKey configuration.");
+        }
 
         var claims = new List<Claim>
         {

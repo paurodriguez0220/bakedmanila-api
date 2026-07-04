@@ -49,9 +49,10 @@ public static class DevSeeder
         }
         var admin = new IdentityUser { UserName = email, Email = email };
         var created = await users.CreateAsync(admin, password);
-        if (created.Succeeded)
+        if (!created.Succeeded)
         {
-            _ = await users.AddToRoleAsync(admin, "Admin");
+            throw new InvalidOperationException(string.Join("; ", created.Errors.Select(e => e.Description)));
         }
+        _ = await users.AddToRoleAsync(admin, "Admin");
     }
 }

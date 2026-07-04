@@ -65,6 +65,12 @@ builder.Services.AddIdentityCore<IdentityUser>(options =>
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<BakedManilaDbContext>();
 
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"];
+if (string.IsNullOrEmpty(jwtSigningKey))
+{
+    throw new InvalidOperationException("Missing Jwt:SigningKey configuration.");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -75,9 +81,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = builder.Configuration["Jwt:Audience"],
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]
-                    ?? throw new InvalidOperationException("Missing Jwt:SigningKey configuration."))),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
             ClockSkew = TimeSpan.FromMinutes(1),
         };
     });
@@ -102,7 +106,21 @@ else
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddSingleton(TimeProvider.System);
 
-if (builder.Configuration["Images:Provider"] == "AzureBlob")
+var imagesProvider = builder.Configuration["Images:Provider"];
+
+// Outside Development, the image provider must be set deliberately — an unconfigured value must
+// not silently fall back to the local FileSystem store in production. Non-dev environments that
+// explicitly configure a provider (e.g. integration tests running as "Testing" with "FileSystem")
+// remain allowed; only an unset/empty value is rejected.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrEmpty(imagesProvider))
+{
+    throw new InvalidOperationException("Images:Provider must be 'AzureBlob' outside Development.");
+}
+
+var imagesRoot = builder.Configuration["Images:FileSystemRoot"]
+    ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "images");
+
+if (imagesProvider == "AzureBlob")
 {
     builder.Services.AddSingleton<IImageStore>(_ => new AzureBlobImageStore(
         new BlobContainerClient(
@@ -112,8 +130,6 @@ if (builder.Configuration["Images:Provider"] == "AzureBlob")
 }
 else
 {
-    var imagesRoot = builder.Configuration["Images:FileSystemRoot"]
-        ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "images");
     builder.Services.AddSingleton<IImageStore>(_ => new FileSystemImageStore(imagesRoot));
 }
 
@@ -136,12 +152,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference(options => options.WithTitle("BakedManila API"));
 
-    var imagesServeRoot = app.Configuration["Images:FileSystemRoot"]
-        ?? Path.Combine(app.Environment.ContentRootPath, "App_Data", "images");
-    Directory.CreateDirectory(imagesServeRoot);
+    Directory.CreateDirectory(imagesRoot);
     app.UseStaticFiles(new StaticFileOptions
     {
-        FileProvider = new PhysicalFileProvider(imagesServeRoot),
+        FileProvider = new PhysicalFileProvider(imagesRoot),
         RequestPath = "/images",
     });
 }

@@ -19,6 +19,10 @@ public sealed class ApiFactory(Action<IWebHostBuilder>? configureHost = null) : 
         builder.UseSetting("Jwt:SigningKey", "test-signing-key-bakedmanila-0123456789abcdef0123456789abcdef");
         builder.UseSetting("Jwt:Issuer", "BakedManila");
         builder.UseSetting("Jwt:Audience", "BakedManila");
+        // Explicit outside Development so Program.cs's fail-fast Images:Provider guard is satisfied;
+        // individual tests may override with their own FileSystemRoot via configureHost.
+        builder.UseSetting("Images:Provider", "FileSystem");
+        builder.UseSetting("Images:FileSystemRoot", Path.Combine(Path.GetTempPath(), $"bm-images-{Guid.NewGuid():N}"));
         configureHost?.Invoke(builder);
     }
 
