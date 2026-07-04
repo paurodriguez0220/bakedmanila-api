@@ -16,6 +16,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:BakedManila", _connectionString);
         builder.UseSetting("Storage:PublicBaseUrl", "https://img.test");
+        builder.UseSetting("Jwt:SigningKey", "test-signing-key-bakedmanila-0123456789abcdef0123456789abcdef");
+        builder.UseSetting("Jwt:Issuer", "BakedManila");
+        builder.UseSetting("Jwt:Audience", "BakedManila");
     }
 
     public async Task<BakedManilaDbContext> CreateDbAsync()

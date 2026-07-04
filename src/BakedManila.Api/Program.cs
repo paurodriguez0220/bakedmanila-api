@@ -1,11 +1,16 @@
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using BakedManila.Api.Auth;
 using BakedManila.Api.Data;
 using BakedManila.Api.Middleware;
 using BakedManila.Core.Data;
 using BakedManila.Core.Repositories;
 using BakedManila.Core.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,10 +40,45 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 5,
                 Window = TimeSpan.FromMinutes(10),
             }));
+    options.AddPolicy("auth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(5),
+            }));
 });
 
 builder.Services.AddDbContext<BakedManilaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("BakedManila")));
+
+builder.Services.AddIdentityCore<IdentityUser>(options =>
+    {
+        options.Password.RequiredLength = 10;
+        options.User.RequireUniqueEmail = true;
+    })
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<BakedManilaDbContext>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:SigningKey"]
+                    ?? throw new InvalidOperationException("Missing Jwt:SigningKey configuration."))),
+            ClockSkew = TimeSpan.FromMinutes(1),
+        };
+    });
+builder.Services.AddAuthorization();
+builder.Services.AddScoped<JwtTokenService>();
 
 builder.Services.AddScoped<IProductRepository, EfProductRepository>();
 builder.Services.AddScoped<IOrderRepository, EfOrderRepository>();
@@ -51,12 +91,15 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    await DevSeeder.MigrateAndSeedAsync(app.Services, CancellationToken.None);
+    await DevSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, CancellationToken.None);
 }
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRateLimiter();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
