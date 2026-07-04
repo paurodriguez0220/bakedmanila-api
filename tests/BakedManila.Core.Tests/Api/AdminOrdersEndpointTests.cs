@@ -75,4 +75,38 @@ public sealed class AdminOrdersEndpointTests : IAsyncLifetime
         var only = Assert.Single(inWindow!);
         Assert.Equal("BM-2026-0102", only.OrderNumber);
     }
+
+    [Fact]
+    public async Task PatchStatus_AdvancesOrder_AndRejectsInvalidTransition()
+    {
+        var orders = await _client.GetFromJsonAsync<List<AdminOrderDto>>("/api/admin/orders?status=Pending");
+        var target = orders![0];
+
+        var ok = await _client.PatchAsJsonAsync($"/api/admin/orders/{target.Id}/status", new { status = "Confirmed" });
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        var updated = await ok.Content.ReadFromJsonAsync<AdminOrderDto>();
+        Assert.Equal("Confirmed", updated!.Status);
+
+        var invalid = await _client.PatchAsJsonAsync($"/api/admin/orders/{target.Id}/status", new { status = "Pending" });
+        Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchStatus_Returns404_ForUnknownOrder()
+    {
+        var response = await _client.PatchAsJsonAsync("/api/admin/orders/999999/status", new { status = "Confirmed" });
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchPayment_TogglesPaidState()
+    {
+        var orders = await _client.GetFromJsonAsync<List<AdminOrderDto>>("/api/admin/orders");
+        var target = orders![0];
+
+        var response = await _client.PatchAsJsonAsync($"/api/admin/orders/{target.Id}/payment", new { paymentStatus = "Paid" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await response.Content.ReadFromJsonAsync<AdminOrderDto>();
+        Assert.Equal("Paid", updated!.PaymentStatus);
+    }
 }

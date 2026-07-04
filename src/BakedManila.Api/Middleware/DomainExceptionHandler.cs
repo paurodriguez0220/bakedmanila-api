@@ -12,6 +12,7 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         (int status, string title) = exception switch
         {
             ProductNotFoundException => (StatusCodes.Status404NotFound, "Product not found"),
+            OrderNotFoundException => (StatusCodes.Status404NotFound, "Order not found"),
             ProductUnavailableException => (StatusCodes.Status409Conflict, "Product unavailable"),
             InvalidStatusTransitionException => (StatusCodes.Status409Conflict, "Invalid status transition"),
             InvalidOrderException => (StatusCodes.Status422UnprocessableEntity, "Invalid order"),
