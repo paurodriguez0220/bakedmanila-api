@@ -47,7 +47,7 @@ BakedManila is an e-commerce webapp for a home bakery in Quezon City (Instagram:
 ```
 bakedmanila-web (React SPA: storefront + /admin)
         │ REST/JSON
-bakedmanila-api (ASP.NET Core, .NET 9)
+bakedmanila-api (ASP.NET Core, .NET 10)
   Controllers → Domain services → Repositories → EF Core
         │              │               │
    Azure SQL      Blob Storage      Email provider
@@ -279,7 +279,7 @@ Commit gate (CLAUDE.md): clean build, green tests, standards reflection, no debu
 | 4 | Order notification | Admin email + admin panel list (source of truth) | In-app only |
 | 5 | Customer contact | Phone required; email, Messenger optional | Accounts-only contact |
 | 6 | Customer accounts | Guest checkout only; schema ready for accounts | Optional or required accounts |
-| 7 | Stack | .NET 9 API + React/Vite/TS | Next.js full-stack; Blazor |
+| 7 | Stack | .NET 10 API + React/Vite/TS | Next.js full-stack; Blazor |
 | 8 | Backend architecture | Pragmatic layered monolith, 2 projects | Clean Architecture + CQRS (cargo-cult here); no-layer minimal APIs |
 | 9 | Hosting | Azure minimal: B1 App Service + SQL serverless + Blob + KV | Full multi-service Azure; free-tier hybrid |
 | 10 | Visual direction | "Warm Signature" (cream/ink/gold, Fraunces, photo-first) | Editorial Boutique; Golden Kraft; 7 other explored directions |
