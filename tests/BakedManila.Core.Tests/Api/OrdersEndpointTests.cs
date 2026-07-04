@@ -83,6 +83,64 @@ public sealed class OrdersEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PlaceOrder_Returns400_ForUndefinedEnumInteger()
+    {
+        var body = new
+        {
+            items = new[] { new { productSlug = "classic-chip", quantity = 2 } },
+            customerName = "Maria",
+            phone = "09171234567",
+            preferredDate = FutureDate,
+            isRush = false,
+            fulfillmentType = "Pickup",
+            paymentMethod = 99,
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/orders", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PlaceOrder_Returns400_ForMissingPaymentMethod()
+    {
+        var body = new
+        {
+            items = new[] { new { productSlug = "classic-chip", quantity = 2 } },
+            customerName = "Maria",
+            phone = "09171234567",
+            preferredDate = FutureDate,
+            isRush = false,
+            fulfillmentType = "Pickup",
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/orders", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Lookup_NormalizesPlusSixtyThreePhone_WhenPlacedAndLookedUpInDifferentFormats()
+    {
+        var body = new
+        {
+            items = new[] { new { productSlug = "classic-chip", quantity = 1 } },
+            customerName = "Maria",
+            phone = "+639171234567",
+            preferredDate = FutureDate,
+            isRush = false,
+            fulfillmentType = "Pickup",
+            paymentMethod = "ManualGcash",
+        };
+        var created = await (await _client.PostAsJsonAsync("/api/orders", body))
+            .Content.ReadFromJsonAsync<OrderDto>();
+
+        var response = await _client.GetAsync($"/api/orders/{created!.OrderNumber}?phone=09171234567");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PlaceOrder_RateLimits_After5PerWindow()
     {
         for (var i = 0; i < 5; i++)

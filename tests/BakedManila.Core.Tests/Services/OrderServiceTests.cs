@@ -7,7 +7,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace BakedManila.Core.Tests.Services;
 
-sealed class FakeProductRepository(List<Product> products) : IProductRepository
+file sealed class FakeProductRepository(List<Product> products) : IProductRepository
 {
     public Task<List<Product>> GetAvailableAsync(CancellationToken ct) =>
         Task.FromResult(products.Where(p => p.IsAvailable && !p.IsDeleted).ToList());
@@ -17,7 +17,7 @@ sealed class FakeProductRepository(List<Product> products) : IProductRepository
         Task.FromResult(products.Where(p => slugs.Contains(p.Slug) && !p.IsDeleted).ToList());
 }
 
-sealed class FakeOrderRepository : IOrderRepository
+file sealed class FakeOrderRepository : IOrderRepository
 {
     public List<Order> Added { get; } = [];
     public int SaveCount { get; private set; }
@@ -30,7 +30,7 @@ sealed class FakeOrderRepository : IOrderRepository
     public Task SaveChangesAsync(CancellationToken ct) { SaveCount++; return Task.CompletedTask; }
 }
 
-sealed class RecordingNotificationSender : INotificationSender
+file sealed class RecordingNotificationSender : INotificationSender
 {
     public List<OrderPlaced> Sent { get; } = [];
     public bool ThrowOnSend { get; set; }
@@ -47,13 +47,16 @@ public class OrderServiceTests
 {
     private static readonly DateOnly Today = new(2026, 7, 4);
 
-    private readonly FakeOrderRepository _orders = new();
-    private readonly RecordingNotificationSender _notifier = new();
-    private readonly FakeProductRepository _products;
+    // Declared by interface (not the file-scoped fake type) so these fields don't leak a
+    // file-local type into this public class's member signatures (CS9051). Tests that need
+    // fake-specific members cast back to the concrete type at the point of use.
+    private readonly IOrderRepository _orders = new FakeOrderRepository();
+    private readonly INotificationSender _notifier = new RecordingNotificationSender();
+    private readonly IProductRepository _products;
 
     public OrderServiceTests()
     {
-        _products = new([
+        _products = new FakeProductRepository([
             new Product { Id = 1, Name = "Classic Chip", Slug = "classic-chip", Price = 280m },
             new Product { Id = 2, Name = "Banana Bread", Slug = "banana-bread", Price = 350m },
             new Product { Id = 3, Name = "Sold Out", Slug = "sold-out", Price = 300m, IsAvailable = false },
@@ -85,7 +88,7 @@ public class OrderServiceTests
         Assert.Equal(1, chip.ProductId);
         Assert.Equal(OrderStatus.Pending, order.Status);
         Assert.Equal(PaymentStatus.Unpaid, order.PaymentStatus);
-        Assert.Equal(1, _orders.SaveCount);
+        Assert.Equal(1, ((FakeOrderRepository)_orders).SaveCount);
         Assert.Equal("BM-2026-0001", order.OrderNumber);
     }
 
@@ -93,7 +96,7 @@ public class OrderServiceTests
     public async Task PlaceOrder_SendsNotification_AfterSave()
     {
         await CreateSut().PlaceOrderAsync(ValidOrder(), CancellationToken.None);
-        var sent = Assert.Single(_notifier.Sent);
+        var sent = Assert.Single(((RecordingNotificationSender)_notifier).Sent);
         Assert.Equal("BM-2026-0001", sent.OrderNumber);
         Assert.Equal(2, sent.Items.Count);
     }
@@ -101,9 +104,9 @@ public class OrderServiceTests
     [Fact]
     public async Task PlaceOrder_NotificationFailure_DoesNotFailOrder()
     {
-        _notifier.ThrowOnSend = true;
+        ((RecordingNotificationSender)_notifier).ThrowOnSend = true;
         var order = await CreateSut().PlaceOrderAsync(ValidOrder(), CancellationToken.None);
-        Assert.Equal(1, _orders.SaveCount);
+        Assert.Equal(1, ((FakeOrderRepository)_orders).SaveCount);
         Assert.NotNull(order.OrderNumber);
     }
 

@@ -17,7 +17,7 @@ public sealed record OrderDto(
         o.Status.ToString(),
         o.PreferredDate,
         o.FulfillmentType.ToString(),
-        (int)(o.Subtotal * 100),
-        o.Items.Select(i => new OrderItemDto(i.ProductName, (int)(i.UnitPrice * 100), i.Quantity))
+        o.Subtotal.ToCentavos(),
+        o.Items.Select(i => new OrderItemDto(i.ProductName, i.UnitPrice.ToCentavos(), i.Quantity))
             .ToList());
 }

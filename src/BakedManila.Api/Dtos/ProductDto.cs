@@ -16,7 +16,7 @@ public sealed record ProductDto(
         p.Slug,
         p.Name,
         p.Description,
-        (int)(p.Price * 100),
+        p.Price.ToCentavos(),
         p.IsAvailable,
         p.Images.OrderBy(i => i.SortOrder)
             .Select(i => new ProductImageDto($"{imageBaseUrl}/{i.BlobName}"))

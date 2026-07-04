@@ -1,4 +1,6 @@
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using BakedManila.Api.Data;
 using BakedManila.Api.Middleware;
 using BakedManila.Core.Data;
 using BakedManila.Core.Repositories;
@@ -9,11 +11,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
-        new System.Text.Json.Serialization.JsonStringEnumConverter()));
+        new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddOpenApi();
 
+// TODO(Plan 5 deploy): App Service fronts this app with a proxy — configure UseForwardedHeaders
+// before UseRateLimiter, or every customer shares the proxy IP's rate-limit partition.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -46,7 +50,7 @@ var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    await BakedManila.Api.Data.DevSeeder.MigrateAndSeedAsync(app.Services, CancellationToken.None);
+    await DevSeeder.MigrateAndSeedAsync(app.Services, CancellationToken.None);
 }
 
 app.UseExceptionHandler();

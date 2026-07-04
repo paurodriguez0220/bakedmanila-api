@@ -1,4 +1,5 @@
 using BakedManila.Api.Dtos;
+using BakedManila.Core.Domain;
 using BakedManila.Core.Repositories;
 using BakedManila.Core.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +25,7 @@ public sealed class OrdersController(OrderService orderService, IOrderRepository
     public async Task<ActionResult<OrderDto>> Lookup(
         string orderNumber, [FromQuery] string phone, CancellationToken ct)
     {
-        var order = await orders.GetByNumberAndPhoneAsync(orderNumber, phone, ct);
+        var order = await orders.GetByNumberAndPhoneAsync(orderNumber, PhoneNumbers.NormalizePh(phone), ct);
         return order is null
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Order not found")
             : Ok(OrderDto.FromEntity(order));
