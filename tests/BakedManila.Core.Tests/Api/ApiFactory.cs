@@ -13,6 +13,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:BakedManila", _connectionString);
         builder.UseSetting("Storage:PublicBaseUrl", "https://img.test");
     }

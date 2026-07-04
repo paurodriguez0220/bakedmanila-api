@@ -44,6 +44,11 @@ builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    await BakedManila.Api.Data.DevSeeder.MigrateAndSeedAsync(app.Services, CancellationToken.None);
+}
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRateLimiter();
