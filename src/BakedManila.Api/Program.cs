@@ -181,18 +181,23 @@ app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseHsts();
-
-    app.UseForwardedHeaders(new ForwardedHeadersOptions
+    var forwardedOptions = new ForwardedHeadersOptions
     {
         ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-        // App Service terminates TLS and fronts this app with its own proxy, which sets these
-        // headers itself — clearing the known network/proxy lists trusts that single hop. This is
-        // only safe because App Service is the sole path to this app; never do this behind a
-        // proxy an attacker could bypass or spoof.
-        KnownIPNetworks = { },
-        KnownProxies = { },
-    });
+    };
+    // App Service terminates TLS and fronts this app with its own proxy, which sets these
+    // headers itself — clearing the known network/proxy lists (loopback-only by default)
+    // trusts that single hop. Clear() is required: the properties are get-only, so an empty
+    // collection initializer would silently keep the defaults. This is only safe because
+    // App Service is the sole path to this app; never do this behind a proxy an attacker
+    // could bypass or spoof.
+    forwardedOptions.KnownIPNetworks.Clear();
+    forwardedOptions.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedOptions);
+
+    // Must come after ForwardedHeaders: HSTS only emits on HTTPS requests, and behind
+    // App Service that is only visible via the rewritten X-Forwarded-Proto scheme.
+    app.UseHsts();
 }
 
 app.UseExceptionHandler();
