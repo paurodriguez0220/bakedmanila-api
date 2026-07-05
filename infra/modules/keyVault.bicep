@@ -59,6 +59,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
     // access via an accessPolicies write (a vault property, Contributor-compatible)
     // instead of a Microsoft.Authorization/roleAssignments resource.
     enableRbacAuthorization: false
+    // Required (even when empty) once enableRbacAuthorization is false; the web app's
+    // policy is appended post-webApp by keyVaultAccessPolicy.bicep ('add' operation).
+    accessPolicies: []
   }
 }
 
