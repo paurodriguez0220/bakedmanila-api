@@ -1,0 +1,74 @@
+name: "BakedManila Infra"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        required: true
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-infra:
+    name: "Deploy infrastructure"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required OIDC variables
+        run: |
+          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_TENANT_ID" ] || [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+            echo "::error::AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID must be set as repository or environment variables — aborting"
+            exit 1
+          fi
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate required deployment secrets
+        run: |
+          missing=""
+          [ -z "$SQL_ADMIN_PASSWORD" ] && missing="$missing SQL_ADMIN_PASSWORD"
+          [ -z "$JWT_SIGNING_KEY" ] && missing="$missing JWT_SIGNING_KEY"
+          [ -z "$ADMIN_PASSWORD" ] && missing="$missing ADMIN_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets in the '${{ inputs.environment }}' GitHub Environment:$missing — aborting"
+            exit 1
+          fi
+          if [ -z "$ACS_EMAIL_CONNECTION_STRING" ]; then
+            echo "::warning::ACS_EMAIL_CONNECTION_STRING not set — email notifications will fall back to logging"
+          fi
+        env:
+          SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ACS_EMAIL_CONNECTION_STRING: ${{ secrets.ACS_EMAIL_CONNECTION_STRING }}
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Bicep template
+        run: |
+          az deployment sub create \
+            --location southeastasia \
+            --template-file infra/main.bicep \
+            --parameters "infra/parameters/${{ inputs.environment }}.bicepparam"
+        env:
+          SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ACS_EMAIL_CONNECTION_STRING: ${{ secrets.ACS_EMAIL_CONNECTION_STRING }}

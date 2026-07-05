@@ -1,0 +1,144 @@
+name: "BakedManila API CICD"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  build-test:
+    name: "Build and test"
+    runs-on: ubuntu-latest
+    env:
+      # Ephemeral, single-run CI container — not a real credential, never reused outside this job.
+      MSSQL_SA_PASSWORD: 'Bkdmnl!CiOnly_2026'
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'Bkdmnl!CiOnly_2026'
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Bkdmnl!CiOnly_2026 -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout api repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Run tests
+        run: dotnet test --configuration Release
+        env:
+          TEST_SQL_CONNECTION_TEMPLATE: "Server=localhost,1433;Database={db};User Id=sa;Password=${{ env.MSSQL_SA_PASSWORD }};TrustServerCertificate=True;MultipleActiveResultSets=true"
+
+  deploy:
+    name: "Deploy to Azure"
+    needs: build-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout api repository
+        uses: actions/checkout@v4
+
+      - name: Checkout web repository
+        uses: actions/checkout@v4
+        with:
+          repository: paurodriguez0220/bakedmanila-web
+          path: web
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Build web storefront
+        run: npm run build
+        working-directory: web
+        env:
+          VITE_API_BASE_URL: ''
+
+      - name: Copy web build into API wwwroot
+        run: |
+          mkdir -p src/BakedManila.Api/wwwroot
+          cp -r web/dist/. src/BakedManila.Api/wwwroot/
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish API
+        run: dotnet publish src/BakedManila.Api/BakedManila.Api.csproj -c Release -o publish
+
+      - name: Validate required OIDC variables
+        run: |
+          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_TENANT_ID" ] || [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+            echo "::error::AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID must be set as repository or environment variables — aborting"
+            exit 1
+          fi
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: app-bkdmnl-prod-sea
+          package: publish
+
+  smoke:
+    name: "Smoke test"
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify storefront responds
+        run: |
+          status=$(curl -s -o /tmp/root.html -w '%{http_code}' -H 'Accept: text/html' https://app-bkdmnl-prod-sea.azurewebsites.net/)
+          if [ "$status" != "200" ]; then
+            echo "::error::Storefront root returned HTTP $status, expected 200"
+            exit 1
+          fi
+          if ! grep -qi '<html' /tmp/root.html; then
+            echo "::error::Storefront root did not return HTML content"
+            exit 1
+          fi
+
+      - name: Verify products API responds
+        run: |
+          status=$(curl -s -o /tmp/products.json -w '%{http_code}' -H 'Accept: application/json' https://app-bkdmnl-prod-sea.azurewebsites.net/api/products)
+          if [ "$status" != "200" ]; then
+            echo "::error::/api/products returned HTTP $status, expected 200"
+            exit 1
+          fi
+          if ! head -c 1 /tmp/products.json | grep -q '\['; then
+            echo "::error::/api/products did not return a JSON array"
+            exit 1
+          fi
