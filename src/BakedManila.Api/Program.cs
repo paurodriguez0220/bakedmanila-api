@@ -91,6 +91,10 @@ builder.Services.AddDbContext<BakedManilaDbContext>(options =>
 builder.Services.AddIdentityCore<IdentityUser>(options =>
     {
         options.Password.RequiredLength = 10;
+        // Alphanumeric-only passwords are allowed deliberately: punctuation breaks
+        // double-click selection and clipboard round-trips for non-technical users;
+        // 10+ chars with mixed case and digits carries the entropy instead.
+        options.Password.RequireNonAlphanumeric = false;
         options.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole>()
