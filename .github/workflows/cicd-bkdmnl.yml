@@ -17,18 +17,22 @@ jobs:
     name: "Build and test"
     runs-on: ubuntu-latest
     env:
-      # Ephemeral, single-run CI container — not a real credential, never reused outside this job.
-      MSSQL_SA_PASSWORD: 'Bkdmnl!CiOnly_2026'
+      # Ephemeral, single-run CI container credential derived from the run id — not a real
+      # secret, never reused outside this job. Single source: the service container env and
+      # the test connection template both consume this value.
+      MSSQL_SA_PASSWORD: 'CI_Passw0rd_${{ github.run_id }}!'
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
           ACCEPT_EULA: 'Y'
-          MSSQL_SA_PASSWORD: 'Bkdmnl!CiOnly_2026'
+          MSSQL_SA_PASSWORD: ${{ env.MSSQL_SA_PASSWORD }}
         ports:
           - 1433:1433
+        # The health command runs inside the container, where MSSQL_SA_PASSWORD is set above —
+        # $MSSQL_SA_PASSWORD expands at container runtime, keeping the password single-sourced.
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Bkdmnl!CiOnly_2026 -Q 'SELECT 1'"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P $MSSQL_SA_PASSWORD -Q 'SELECT 1'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -40,6 +44,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Create empty wwwroot
+        # wwwroot is gitignored (CI drops the SPA build there at deploy time); tests that host
+        # the API in the Development environment need the web root directory to exist.
+        run: mkdir -p src/BakedManila.Api/wwwroot
 
       - name: Run tests
         run: dotnet test --configuration Release
@@ -55,6 +64,17 @@ jobs:
     steps:
       - name: Checkout api repository
         uses: actions/checkout@v4
+
+      - name: Validate required OIDC variables
+        run: |
+          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_TENANT_ID" ] || [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
+            echo "::error::AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID must be set as repository or environment variables — aborting"
+            exit 1
+          fi
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Checkout web repository
         uses: actions/checkout@v4
@@ -89,17 +109,6 @@ jobs:
 
       - name: Publish API
         run: dotnet publish src/BakedManila.Api/BakedManila.Api.csproj -c Release -o publish
-
-      - name: Validate required OIDC variables
-        run: |
-          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_TENANT_ID" ] || [ -z "$AZURE_SUBSCRIPTION_ID" ]; then
-            echo "::error::AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID must be set as repository or environment variables — aborting"
-            exit 1
-          fi
-        env:
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to Azure
         uses: azure/login@v2

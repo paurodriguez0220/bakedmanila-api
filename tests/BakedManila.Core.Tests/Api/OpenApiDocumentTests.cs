@@ -5,19 +5,36 @@ namespace BakedManila.Core.Tests.Api;
 
 public sealed class OpenApiDocumentTests : IAsyncLifetime
 {
+    private string _wwwrootDir = null!;
     private ApiFactory _factory = null!;
     private HttpClient _client = null!;
 
     public async Task InitializeAsync()
     {
+        // The Development environment enables the static-web-assets loader, which requires the
+        // web root directory to exist. src/BakedManila.Api/wwwroot is gitignored (CI drops the
+        // SPA build there), so on a clean checkout it is absent — point the host at a fresh
+        // temp web root to keep this test independent of checkout state.
+        _wwwrootDir = Path.Combine(Path.GetTempPath(), $"bm-wwwroot-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_wwwrootDir);
+
         // MapOpenApi() is only wired up under IsDevelopment() in Program.cs, so the document
         // is only reachable when the host runs in the Development environment.
-        _factory = new ApiFactory(configureHost: b => b.UseEnvironment("Development"));
+        _factory = new ApiFactory(configureHost: b => b
+            .UseEnvironment("Development")
+            .UseWebRoot(_wwwrootDir));
         await using var db = await _factory.CreateDbAsync(); // ensures schema
         _client = _factory.CreateClient();
     }
 
-    public async Task DisposeAsync() => await _factory.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        await _factory.DisposeAsync();
+        if (Directory.Exists(_wwwrootDir))
+        {
+            Directory.Delete(_wwwrootDir, recursive: true);
+        }
+    }
 
     [Fact]
     public async Task GetOpenApiDocument_DeclaresBearerSecurityScheme()
