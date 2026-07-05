@@ -223,6 +223,22 @@ if (!app.Environment.IsDevelopment())
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
+// Static files MUST be registered before routing runs. WebApplication auto-inserts
+// UseRouting at the very start of the pipeline unless it is called explicitly; the SPA's
+// MapFallback("{*path}") endpoint then matches every URL at routing time, and
+// StaticFileMiddleware skips requests that already have a matched endpoint — which served
+// index.html for every CSS/JS asset in production. Registering static files here and
+// calling UseRouting explicitly right after restores file-before-fallback ordering.
+var spaIndex = Path.Combine(app.Environment.WebRootPath ?? "", "index.html");
+var hasSpa = File.Exists(spaIndex);
+if (hasSpa)
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
+
+app.UseRouting();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseCors("ViteDev");
@@ -246,11 +262,8 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-var spaIndex = Path.Combine(app.Environment.WebRootPath ?? "", "index.html");
-if (File.Exists(spaIndex))
+if (hasSpa)
 {
-    app.UseDefaultFiles();
-    app.UseStaticFiles();
     app.MapFallback("{*path}", async context =>
     {
         if (context.Request.Path.StartsWithSegments("/api")

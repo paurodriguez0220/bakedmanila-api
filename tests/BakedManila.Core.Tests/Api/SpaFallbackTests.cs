@@ -6,6 +6,7 @@ namespace BakedManila.Core.Tests.Api;
 public sealed class SpaFallbackTests : IAsyncLifetime
 {
     private const string Sentinel = "spa-fallback-sentinel-3f9a";
+    private const string CssSentinel = "/* css-sentinel-7b2e */ body { color: rebeccapurple; }";
 
     private string _wwwrootDir = null!;
     private ApiFactory _factory = null!;
@@ -15,9 +16,13 @@ public sealed class SpaFallbackTests : IAsyncLifetime
     {
         _wwwrootDir = Path.Combine(Path.GetTempPath(), $"bm-wwwroot-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_wwwrootDir);
+        Directory.CreateDirectory(Path.Combine(_wwwrootDir, "assets"));
         await File.WriteAllTextAsync(
             Path.Combine(_wwwrootDir, "index.html"),
             $"<!DOCTYPE html><html><body>{Sentinel}</body></html>");
+        await File.WriteAllTextAsync(
+            Path.Combine(_wwwrootDir, "assets", "app.css"),
+            CssSentinel);
 
         _factory = new ApiFactory(builder => builder.UseWebRoot(_wwwrootDir));
         await using var db = await _factory.CreateDbAsync();
@@ -43,6 +48,22 @@ public sealed class SpaFallbackTests : IAsyncLifetime
         Assert.Equal("text/html", response.Content.Headers.ContentType!.MediaType);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains(Sentinel, body);
+    }
+
+    [Fact]
+    public async Task GetStaticAsset_WithWwwroot_ServesTheFileNotTheSpaFallback()
+    {
+        // Regression: MapFallback("{*path}") matches every URL at routing time, and
+        // StaticFileMiddleware skips requests with a matched endpoint — so unless static
+        // files are registered before UseRouting, every asset came back as index.html
+        // (broke all CSS/JS in the first production deploy).
+        var response = await _client.GetAsync("/assets/app.css");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/css", response.Content.Headers.ContentType!.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("css-sentinel-7b2e", body);
+        Assert.DoesNotContain(Sentinel, body);
     }
 
     [Fact]
