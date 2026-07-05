@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,7 +25,22 @@ builder.Services.AddControllers()
         new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Get a token from POST /api/auth/login, then paste it here.",
+        };
+        return Task.CompletedTask;
+    });
+});
 
 // TODO(Plan 5 deploy): App Service fronts this app with a proxy — configure UseForwardedHeaders
 // before UseRateLimiter, or every customer shares the proxy IP's rate-limit partition.
