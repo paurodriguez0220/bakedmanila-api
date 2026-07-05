@@ -152,4 +152,18 @@ public sealed class OrdersEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
         Assert.NotNull(limited.Headers.RetryAfter);
     }
+
+    [Fact]
+    public async Task Lookup_RateLimits_After30PerWindow()
+    {
+        for (var i = 0; i < 30; i++)
+        {
+            var response = await _client.GetAsync("/api/orders/BM-NONE?phone=09171234567");
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        var limited = await _client.GetAsync("/api/orders/BM-NONE?phone=09171234567");
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.NotNull(limited.Headers.RetryAfter);
+    }
 }

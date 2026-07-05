@@ -11,6 +11,7 @@ using BakedManila.Core.Data;
 using BakedManila.Core.Repositories;
 using BakedManila.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -42,8 +43,6 @@ builder.Services.AddOpenApi(options =>
     });
 });
 
-// TODO(Plan 5 deploy): App Service fronts this app with a proxy — configure UseForwardedHeaders
-// before UseRateLimiter, or every customer shares the proxy IP's rate-limit partition.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -66,6 +65,14 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(5),
+            }));
+    options.AddPolicy("lookup", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(5),
             }));
 });
@@ -162,6 +169,30 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     await DevSeeder.MigrateAndSeedAsync(app.Services, app.Configuration, CancellationToken.None);
+}
+else if (app.Configuration.GetValue<bool>("Migrations:ApplyAtStartup"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<BakedManilaDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+
+    app.UseForwardedHeaders(new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+        // App Service terminates TLS and fronts this app with its own proxy, which sets these
+        // headers itself — clearing the known network/proxy lists trusts that single hop. This is
+        // only safe because App Service is the sole path to this app; never do this behind a
+        // proxy an attacker could bypass or spoof.
+        KnownIPNetworks = { },
+        KnownProxies = { },
+    });
 }
 
 app.UseExceptionHandler();

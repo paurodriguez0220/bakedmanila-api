@@ -22,6 +22,7 @@ public sealed class OrdersController(OrderService orderService, IOrderRepository
     }
 
     [HttpGet("{orderNumber}")]
+    [EnableRateLimiting("lookup")]
     public async Task<ActionResult<OrderDto>> Lookup(
         string orderNumber, [FromQuery] string phone, CancellationToken ct)
     {
