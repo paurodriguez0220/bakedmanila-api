@@ -64,6 +64,7 @@ jobs:
       - name: Deploy Bicep template
         run: |
           az deployment sub create \
+            --name "bkdmnl-${{ inputs.environment }}-${{ github.run_id }}" \
             --location southeastasia \
             --template-file infra/main.bicep \
             --parameters "infra/parameters/${{ inputs.environment }}.bicepparam"

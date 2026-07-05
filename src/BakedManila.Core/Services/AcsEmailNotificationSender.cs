@@ -12,10 +12,17 @@ public sealed class AcsEmailNotificationSender(
 {
     public async Task SendOrderPlacedAsync(OrderPlaced notification, CancellationToken ct)
     {
-        var from = config["Email:From"]
-            ?? throw new InvalidOperationException("Missing Email:From configuration.");
-        var to = config["Email:To"]
-            ?? throw new InvalidOperationException("Missing Email:To configuration.");
+        var from = config["Email:From"];
+        if (string.IsNullOrEmpty(from))
+        {
+            throw new InvalidOperationException("Missing Email:From configuration.");
+        }
+
+        var to = config["Email:To"];
+        if (string.IsNullOrEmpty(to))
+        {
+            throw new InvalidOperationException("Missing Email:To configuration.");
+        }
 
         var (subject, plainText) = OrderPlacedEmail.Build(notification);
         var message = new EmailMessage(from, to, new EmailContent(subject) { PlainText = plainText });

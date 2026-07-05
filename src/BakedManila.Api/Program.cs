@@ -21,6 +21,10 @@ using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// No-ops locally without an ApplicationInsights:ConnectionString configured; in Azure the
+// connection string is supplied via App Service application settings (from Key Vault).
+builder.Services.AddApplicationInsightsTelemetry();
+
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
         new JsonStringEnumConverter(allowIntegerValues: false)));
@@ -78,7 +82,11 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddDbContext<BakedManilaDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("BakedManila")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("BakedManila"),
+        // Azure SQL serverless auto-pauses when idle and takes several seconds to resume;
+        // without retry-on-failure the first request after a pause fails with a transient
+        // connection error instead of transparently waiting for the database to wake up.
+        sql => sql.EnableRetryOnFailure()));
 
 builder.Services.AddIdentityCore<IdentityUser>(options =>
     {
@@ -126,6 +134,15 @@ builder.Services.AddScoped<IPaymentMethod, ManualPayment>();
 var emailConnectionString = builder.Configuration["Email:ConnectionString"];
 if (!string.IsNullOrEmpty(emailConnectionString))
 {
+    // Fail fast at startup rather than letting AcsEmailNotificationSender throw the first
+    // time an order is placed — a misconfigured From/To should never ship silently.
+    if (string.IsNullOrEmpty(builder.Configuration["Email:From"])
+        || string.IsNullOrEmpty(builder.Configuration["Email:To"]))
+    {
+        throw new InvalidOperationException(
+            "Email:From and Email:To are required when Email:ConnectionString is set.");
+    }
+
     builder.Services.AddSingleton(new EmailClient(emailConnectionString));
     builder.Services.AddScoped<INotificationSender, AcsEmailNotificationSender>();
 }
@@ -175,6 +192,9 @@ else if (app.Configuration.GetValue<bool>("Migrations:ApplyAtStartup"))
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<BakedManilaDbContext>();
     await db.Database.MigrateAsync();
+    // No product seeding outside Development — only the idempotent Admin role/user seed,
+    // which no-ops unless Admin:Email / Admin:Password are configured.
+    await DevSeeder.SeedAdminAsync(scope.ServiceProvider, app.Configuration, CancellationToken.None);
 }
 
 app.UseMiddleware<SecurityHeadersMiddleware>();

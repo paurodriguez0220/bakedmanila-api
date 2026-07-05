@@ -26,9 +26,16 @@ public static class DevSeeder
         await SeedAdminAsync(scope.ServiceProvider, config, ct);
     }
 
-    private static async Task SeedAdminAsync(IServiceProvider scopedServices, IConfiguration config, CancellationToken ct)
+    /// <summary>
+    /// Idempotently ensures the Admin role and the seed admin user exist. Reads
+    /// Admin:Email / Admin:Password from configuration; silently no-ops when either is
+    /// absent, so this is safe to call unconditionally — including in production, where
+    /// no admin account should ever be created implicitly. Throws if Identity user
+    /// creation fails (e.g. password policy violation) so a misconfigured seed fails
+    /// loudly at startup rather than silently leaving prod without an admin account.
+    /// </summary>
+    public static async Task SeedAdminAsync(IServiceProvider scopedServices, IConfiguration config, CancellationToken ct)
     {
-        _ = ct;
         var roles = scopedServices.GetRequiredService<RoleManager<IdentityRole>>();
         if (!await roles.RoleExistsAsync("Admin"))
         {
@@ -39,7 +46,7 @@ public static class DevSeeder
         var password = config["Admin:Password"];
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
         {
-            return; // no admin configured — skip (prod seeds via config in Plan 5)
+            return; // no admin configured — skip (opt-in via Admin:Email / Admin:Password)
         }
 
         var users = scopedServices.GetRequiredService<UserManager<IdentityUser>>();

@@ -121,8 +121,19 @@ one unset skips its Key Vault secret write rather than writing a blank value.
 via `@Microsoft.KeyVault(SecretUri=...)`) is used instead of managed identity for the
 database connection. Entra-only SQL auth requires a post-deployment contained-user
 script against the database, which the standard's "no manual post-deployment steps"
-rule forbids. SQL auth keeps provisioning to a single Bicep deployment; Blob Storage and
-Key Vault still use managed identity + RBAC.
+rule forbids. SQL auth keeps provisioning to a single Bicep deployment. Key Vault access
+uses managed identity + RBAC today; Blob Storage access still authenticates with the
+KV-stored connection string — the app's managed identity is granted the Storage Blob
+Data Contributor role (see `infra/modules/storageAccount.rbac.bicep`), but that grant is
+forward-looking for a future migration to `DefaultAzureCredential` and isn't consumed
+by the app yet.
+
+**Task-7 runbook note:** on first provision, App Service application settings can
+briefly serve unresolved `@Microsoft.KeyVault(SecretUri=...)` references if the app
+starts before the Key Vault RBAC grant (`Key Vault Secrets User` on the app's managed
+identity) has propagated. If the app fails to start or throws configuration errors on
+first deploy, restart the Web App once after a minute or two — RBAC propagation is
+typically the cause, and a restart re-resolves the references once it's in effect.
 
 **Cost:** roughly $13–15/month per environment — App Service B1 (~$13/mo), SQL
 serverless with auto-pause after 60 minutes idle (near-$0 when idle, ~$0.50–1/mo for a

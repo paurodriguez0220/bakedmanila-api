@@ -129,25 +129,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Verify storefront responds
+        # Retries tolerate cold start after deploy: App Service warmup, Key Vault reference
+        # resolution, and the SQL serverless database resuming from auto-pause can all take
+        # the first request(s) past a single-shot timeout.
         run: |
-          status=$(curl -s -o /tmp/root.html -w '%{http_code}' -H 'Accept: text/html' https://app-bkdmnl-prod-sea.azurewebsites.net/)
-          if [ "$status" != "200" ]; then
-            echo "::error::Storefront root returned HTTP $status, expected 200"
-            exit 1
-          fi
-          if ! grep -qi '<html' /tmp/root.html; then
-            echo "::error::Storefront root did not return HTML content"
-            exit 1
-          fi
+          max_attempts=10
+          for attempt in $(seq 1 "$max_attempts"); do
+            status=$(curl -s -o /tmp/root.html -w '%{http_code}' -H 'Accept: text/html' https://app-bkdmnl-prod-sea.azurewebsites.net/ || echo "000")
+            if [ "$status" = "200" ] && grep -qi '<html' /tmp/root.html; then
+              echo "Storefront responded with HTML on attempt $attempt"
+              exit 0
+            fi
+            echo "Attempt $attempt/$max_attempts: storefront returned HTTP $status, retrying in 30s..."
+            sleep 30
+          done
+          echo "::error::Storefront root did not return 200 + HTML after $max_attempts attempts"
+          exit 1
 
       - name: Verify products API responds
         run: |
-          status=$(curl -s -o /tmp/products.json -w '%{http_code}' -H 'Accept: application/json' https://app-bkdmnl-prod-sea.azurewebsites.net/api/products)
-          if [ "$status" != "200" ]; then
-            echo "::error::/api/products returned HTTP $status, expected 200"
-            exit 1
-          fi
-          if ! head -c 1 /tmp/products.json | grep -q '\['; then
-            echo "::error::/api/products did not return a JSON array"
-            exit 1
-          fi
+          max_attempts=10
+          for attempt in $(seq 1 "$max_attempts"); do
+            status=$(curl -s -o /tmp/products.json -w '%{http_code}' -H 'Accept: application/json' https://app-bkdmnl-prod-sea.azurewebsites.net/api/products || echo "000")
+            if [ "$status" = "200" ] && head -c 1 /tmp/products.json | grep -q '\['; then
+              echo "/api/products responded with a JSON array on attempt $attempt"
+              exit 0
+            fi
+            echo "Attempt $attempt/$max_attempts: /api/products returned HTTP $status, retrying in 30s..."
+            sleep 30
+          done
+          echo "::error::/api/products did not return a JSON array after $max_attempts attempts"
+          exit 1
