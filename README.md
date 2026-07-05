@@ -85,3 +85,42 @@ Public URLs are built from `Storage:PublicBaseUrl`
     dotnet test
 
 Integration tests create throwaway LocalDB databases and delete them on dispose.
+
+## Infrastructure
+
+Provisioned by Bicep under `infra/` — one Linux B1 App Service serving the API and the
+built storefront same-origin, Azure SQL serverless, Blob Storage for product images,
+Key Vault for secrets, Application Insights, and Log Analytics. Region is hardcoded to
+Southeast Asia; naming follows `{type}-bkdmnl-{env}-sea` (see
+[standards-docs/azure-infra.md](https://github.com/paurodriguez0220/standards-docs)).
+
+`main.bicep` deploys at subscription scope — it creates the resource group and calls
+every module, so a single command provisions an environment end to end:
+
+    az deployment sub create `
+      --location southeastasia `
+      --template-file infra/main.bicep `
+      --parameters infra/parameters/prod.bicepparam
+
+In CI this runs via the manual-only `infra-bkdmnl.yml` workflow (Task 5). Locally, set
+these environment variables before running the command above — each has an empty
+default, so leaving one unset skips its Key Vault secret write rather than writing a
+blank value:
+
+- `SQL_ADMIN_PASSWORD` — SQL Server admin login password
+- `JWT_SIGNING_KEY` — JWT signing key (64+ random hex chars recommended)
+- `ADMIN_PASSWORD` — seed admin account password
+- `ACS_EMAIL_CONNECTION_STRING` — Azure Communication Services Email connection string
+  (optional — omitted, the app keeps using `LoggingNotificationSender`)
+
+**Deviation from `azure-infra.md`:** SQL auth (login/password in Key Vault, referenced
+via `@Microsoft.KeyVault(SecretUri=...)`) is used instead of managed identity for the
+database connection. Entra-only SQL auth requires a post-deployment contained-user
+script against the database, which the standard's "no manual post-deployment steps"
+rule forbids. SQL auth keeps provisioning to a single Bicep deployment; Blob Storage and
+Key Vault still use managed identity + RBAC.
+
+**Cost:** roughly $13–15/month per environment — App Service B1 (~$13/mo), SQL
+serverless with auto-pause after 60 minutes idle (near-$0 when idle, ~$0.50–1/mo for a
+low-traffic storefront), Storage/Key Vault/Application Insights/Log Analytics (all
+consumption-based, cents/month at this scale).

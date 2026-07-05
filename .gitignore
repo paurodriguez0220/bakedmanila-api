@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Compiled Bicep output (az bicep build / build-params) — source of truth is the .bicep/.bicepparam files
+infra/**/*.json
+
 # User-specific files
 *.rsuser
 *.suo
