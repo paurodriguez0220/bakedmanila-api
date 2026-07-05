@@ -42,7 +42,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing 
   name: storageAccountName
 }
 
-var blobConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=core.windows.net'
+var blobConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   name: 'kv-${appName}-${env}-sea'
@@ -57,7 +57,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   }
 }
 
-// Always written — the SQL password is a required deployment input, not optional.
+// Written whenever the SQL admin password is supplied — which is every real deployment,
+// since sqlServer.bicep requires it unconditionally. The guard keeps a passwordless
+// what-if/dry run from writing a secret with an incomplete connection string.
 resource sqlConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = if (!empty(sqlAdminPassword)) {
   parent: keyVault
   name: 'SqlConnectionString'

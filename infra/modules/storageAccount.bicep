@@ -38,3 +38,5 @@ resource productImagesContainer 'Microsoft.Storage/storageAccounts/blobServices/
 
 output name string = storageAccount.name
 output id string = storageAccount.id
+// Trailing slash included, e.g. https://stbkdmnlprodsea.blob.core.windows.net/
+output blobEndpoint string = storageAccount.properties.primaryEndpoints.blob

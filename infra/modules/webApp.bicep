@@ -40,7 +40,10 @@ param emailTo string
 @description('Application Insights connection string')
 param appInsightsConnectionString string
 
-var storagePublicBaseUrl = 'https://st${toLower(appName)}${toLower(env)}sea.blob.${environment().suffixes.storage}/product-images'
+@description('Primary blob endpoint of the storage account, with trailing slash')
+param storageBlobEndpoint string
+
+var storagePublicBaseUrl = '${storageBlobEndpoint}product-images'
 
 var baseAppSettings = [
   {

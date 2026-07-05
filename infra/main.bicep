@@ -134,6 +134,7 @@ module webApp 'modules/webApp.bicep' = {
     emailFrom: emailFrom
     emailTo: emailTo
     appInsightsConnectionString: appInsights.outputs.connectionString
+    storageBlobEndpoint: storageAccount.outputs.blobEndpoint
   }
 }
 

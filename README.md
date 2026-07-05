@@ -103,15 +103,19 @@ every module, so a single command provisions an environment end to end:
       --parameters infra/parameters/prod.bicepparam
 
 In CI this runs via the manual-only `infra-bkdmnl.yml` workflow (Task 5). Locally, set
-these environment variables before running the command above — each has an empty
-default, so leaving one unset skips its Key Vault secret write rather than writing a
-blank value:
+these environment variables before running the command above:
 
-- `SQL_ADMIN_PASSWORD` — SQL Server admin login password
+- `SQL_ADMIN_PASSWORD` — SQL Server admin login password. **Required on every deploy** —
+  it is passed straight to the SQL server's `administratorLoginPassword`, so an unset
+  value fails the deployment. Must not contain `;` or quotes (it is composed into the
+  ADO connection string secret).
 - `JWT_SIGNING_KEY` — JWT signing key (64+ random hex chars recommended)
 - `ADMIN_PASSWORD` — seed admin account password
 - `ACS_EMAIL_CONNECTION_STRING` — Azure Communication Services Email connection string
   (optional — omitted, the app keeps using `LoggingNotificationSender`)
+
+The last three are optional with skip semantics: each has an empty default, and leaving
+one unset skips its Key Vault secret write rather than writing a blank value.
 
 **Deviation from `azure-infra.md`:** SQL auth (login/password in Key Vault, referenced
 via `@Microsoft.KeyVault(SecretUri=...)`) is used instead of managed identity for the
