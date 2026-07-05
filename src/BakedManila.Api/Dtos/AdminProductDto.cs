@@ -12,7 +12,7 @@ public sealed record AdminProductDto(
     int SortOrder,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    IReadOnlyList<ProductImageDto> Images)
+    IReadOnlyList<ProductImageAdminDto> Images)
 {
     public static AdminProductDto FromEntity(Product p, string imageBaseUrl) => new(
         p.Id,
@@ -25,6 +25,6 @@ public sealed record AdminProductDto(
         p.CreatedAt,
         p.UpdatedAt,
         p.Images.OrderBy(i => i.SortOrder)
-            .Select(i => new ProductImageDto($"{imageBaseUrl}/{i.BlobName}"))
+            .Select(i => new ProductImageAdminDto(i.Id, $"{imageBaseUrl}/{i.BlobName}", i.SortOrder))
             .ToList());
 }

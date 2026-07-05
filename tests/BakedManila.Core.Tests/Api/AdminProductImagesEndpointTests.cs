@@ -65,7 +65,9 @@ public sealed class AdminProductImagesEndpointTests : IAsyncLifetime
 
         // image URL appears on the admin product
         var admin = await _client.GetFromJsonAsync<List<AdminProductDto>>("/api/admin/products");
-        Assert.Single(admin!.Single(p => p.Id == _productId).Images);
+        var adminImage = admin!.Single(p => p.Id == _productId).Images.Single();
+        Assert.True(adminImage.Id > 0);
+        Assert.Equal(1, adminImage.SortOrder);
     }
 
     [Fact]
