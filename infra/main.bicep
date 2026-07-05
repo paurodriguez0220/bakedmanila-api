@@ -88,8 +88,19 @@ module storageAccount 'modules/storageAccount.bicep' = {
 }
 
 // SQL and storage land before Key Vault — the vault composes their connection strings
-// into secrets. Web App consumes the vault's secret URIs; RBAC modules run last, once
-// the web app's managed identity exists.
+// into secrets. Web App consumes the vault's secret URIs; the Key Vault access policy
+// module runs last, once the web app's managed identity exists.
+//
+// Note: the RBAC modules (keyVault.rbac.bicep, storageAccount.rbac.bicep) that used to
+// live here have been removed. The deploy service principal only has Contributor on the
+// resource group and this tenant's admin cannot grant it roleAssignments/write, so the
+// template can no longer contain any Microsoft.Authorization/roleAssignments resources.
+// Key Vault access is now granted via an access policy (see modules/keyVaultAccessPolicy.bicep),
+// which is a property write on the vault and Contributor-compatible. Blob Storage access
+// already goes through the KV-stored connection string (ConnectionStrings__BlobStorage in
+// webApp.bicep), not the managed identity, so dropping the Storage Blob Data Contributor
+// grant removes a forward-looking, never-consumed permission with no functional impact.
+// Revisit RBAC for both if tenant permissions ever allow granting roleAssignments/write.
 module keyVault 'modules/keyVault.bicep' = {
   name: 'keyVault'
   params: {
@@ -128,16 +139,8 @@ module webApp 'modules/webApp.bicep' = {
   }
 }
 
-module storageAccountRbac 'modules/storageAccount.rbac.bicep' = {
-  name: 'storageAccountRbac'
-  params: {
-    storageAccountName: storageAccount.outputs.name
-    principalId: webApp.outputs.principalId
-  }
-}
-
-module keyVaultRbac 'modules/keyVault.rbac.bicep' = {
-  name: 'keyVaultRbac'
+module keyVaultAccessPolicy 'modules/keyVaultAccessPolicy.bicep' = {
+  name: 'keyVaultAccessPolicy'
   params: {
     keyVaultName: keyVault.outputs.name
     principalId: webApp.outputs.principalId

@@ -53,7 +53,12 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
       name: 'standard'
     }
     tenantId: tenantId
-    enableRbacAuthorization: true
+    // Access-policy model, not RBAC — the deploy service principal only has Contributor
+    // on the resource group and cannot be granted roleAssignments/write in this tenant.
+    // See modules/keyVaultAccessPolicy.bicep, which grants the web app's managed identity
+    // access via an accessPolicies write (a vault property, Contributor-compatible)
+    // instead of a Microsoft.Authorization/roleAssignments resource.
+    enableRbacAuthorization: false
   }
 }
 
