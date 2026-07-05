@@ -226,6 +226,28 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+var spaIndex = Path.Combine(app.Environment.WebRootPath ?? "", "index.html");
+if (File.Exists(spaIndex))
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+    app.MapFallback("{*path}", async context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api")
+            || context.Request.Path.StartsWithSegments("/openapi")
+            || context.Request.Path.StartsWithSegments("/scalar")
+            || context.Request.Path.StartsWithSegments("/images"))
+        {
+            // Unmatched API-shaped route: 404 here, upgraded to problem+json by UseStatusCodePages.
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        context.Response.ContentType = "text/html";
+        await context.Response.SendFileAsync(spaIndex);
+    });
+}
+
 app.MapControllers();
 
 app.Run();
