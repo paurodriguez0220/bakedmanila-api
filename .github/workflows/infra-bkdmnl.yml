@@ -61,11 +61,23 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # Resource-group-scoped deployments (az deployment group) cannot create their own
+      # resource group, and least-privilege scoping requires the OIDC service principal
+      # to hold Contributor on the bkdmnl resource groups rather than the subscription.
+      # This is the one az write allowed outside the Bicep deployment itself — it's
+      # idempotent, so re-running against an existing resource group is a no-op.
+      - name: Ensure resource group exists
+        run: |
+          az group create \
+            --name "rg-bkdmnl-${{ inputs.environment }}-sea" \
+            --location southeastasia \
+            --output none
+
       - name: Deploy Bicep template
         run: |
-          az deployment sub create \
+          az deployment group create \
+            --resource-group "rg-bkdmnl-${{ inputs.environment }}-sea" \
             --name "bkdmnl-${{ inputs.environment }}-${{ github.run_id }}" \
-            --location southeastasia \
             --template-file infra/main.bicep \
             --parameters "infra/parameters/${{ inputs.environment }}.bicepparam"
         env:

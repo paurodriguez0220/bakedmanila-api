@@ -94,16 +94,24 @@ Key Vault for secrets, Application Insights, and Log Analytics. Region is hardco
 Southeast Asia; naming follows `{type}-bkdmnl-{env}-sea` (see
 [standards-docs/azure-infra.md](https://github.com/paurodriguez0220/standards-docs)).
 
-`main.bicep` deploys at subscription scope — it creates the resource group and calls
-every module, so a single command provisions an environment end to end:
+`main.bicep` deploys at resource-group scope — every module deploys implicitly into the
+target resource group, so the OIDC service principal only needs Contributor on the
+bkdmnl resource groups, not the subscription. The resource group itself must exist
+first (a resource-group-scoped deployment cannot create its own resource group):
 
-    az deployment sub create `
-      --location southeastasia `
+    az group create `
+      --name rg-bkdmnl-prod-sea `
+      --location southeastasia
+
+    az deployment group create `
+      --resource-group rg-bkdmnl-prod-sea `
       --template-file infra/main.bicep `
       --parameters infra/parameters/prod.bicepparam
 
-In CI this runs via the manual-only `infra-bkdmnl.yml` workflow (Task 5). Locally, set
-these environment variables before running the command above:
+In CI this runs via the manual-only `infra-bkdmnl.yml` workflow (Task 5) — it creates
+the resource group with an idempotent `az group create` step, then deploys with
+`az deployment group create`. Locally, set these environment variables before running
+the commands above:
 
 - `SQL_ADMIN_PASSWORD` — SQL Server admin login password. **Required on every deploy** —
   it is passed straight to the SQL server's `administratorLoginPassword`, so an unset

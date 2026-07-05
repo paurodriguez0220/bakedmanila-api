@@ -1,5 +1,3 @@
-targetScope = 'subscription'
-
 @description('Application code — the universal key across resource names, resource groups, and workflows')
 param appName string = 'bkdmnl'
 
@@ -35,16 +33,14 @@ param adminPassword string = ''
 param acsEmailConnectionString string = ''
 
 // Region is hardcoded per app, not parameterized — see standards-docs/azure-infra.md.
+// Resource-group-scoped deployment (default scope) — the resource group itself is
+// created by the workflow before this deployment runs (see infra-bkdmnl.yml), so the
+// OIDC service principal only needs Contributor on the bkdmnl resource groups, not the
+// subscription.
 var location = 'southeastasia'
-
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: 'rg-${appName}-${env}-sea'
-  location: location
-}
 
 module logAnalytics 'modules/logAnalytics.bicep' = {
   name: 'logAnalytics'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -54,7 +50,6 @@ module logAnalytics 'modules/logAnalytics.bicep' = {
 
 module appInsights 'modules/appInsights.bicep' = {
   name: 'appInsights'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -65,7 +60,6 @@ module appInsights 'modules/appInsights.bicep' = {
 
 module appServicePlan 'modules/appServicePlan.bicep' = {
   name: 'appServicePlan'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -76,7 +70,6 @@ module appServicePlan 'modules/appServicePlan.bicep' = {
 
 module sqlServer 'modules/sqlServer.bicep' = {
   name: 'sqlServer'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -87,7 +80,6 @@ module sqlServer 'modules/sqlServer.bicep' = {
 
 module storageAccount 'modules/storageAccount.bicep' = {
   name: 'storageAccount'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -100,7 +92,6 @@ module storageAccount 'modules/storageAccount.bicep' = {
 // the web app's managed identity exists.
 module keyVault 'modules/keyVault.bicep' = {
   name: 'keyVault'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -118,7 +109,6 @@ module keyVault 'modules/keyVault.bicep' = {
 
 module webApp 'modules/webApp.bicep' = {
   name: 'webApp'
-  scope: rg
   params: {
     appName: appName
     env: env
@@ -140,7 +130,6 @@ module webApp 'modules/webApp.bicep' = {
 
 module storageAccountRbac 'modules/storageAccount.rbac.bicep' = {
   name: 'storageAccountRbac'
-  scope: rg
   params: {
     storageAccountName: storageAccount.outputs.name
     principalId: webApp.outputs.principalId
@@ -149,7 +138,6 @@ module storageAccountRbac 'modules/storageAccount.rbac.bicep' = {
 
 module keyVaultRbac 'modules/keyVault.rbac.bicep' = {
   name: 'keyVaultRbac'
-  scope: rg
   params: {
     keyVaultName: keyVault.outputs.name
     principalId: webApp.outputs.principalId
