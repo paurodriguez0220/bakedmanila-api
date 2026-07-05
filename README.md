@@ -147,3 +147,17 @@ typically the cause, and a restart re-resolves the references once it's in effec
 serverless with auto-pause after 60 minutes idle (near-$0 when idle, ~$0.50–1/mo for a
 low-traffic storefront), Storage/Key Vault/Application Insights/Log Analytics (all
 consumption-based, cents/month at this scale).
+
+### One-time per-environment bootstrap (human, not CI)
+
+The GitHub OIDC identity is granted Contributor **per resource group** (least
+privilege), so a human must create each environment's RG and grant the role once:
+
+    az group create --name rg-bkdmnl-<env>-sea --location southeastasia
+    az role assignment create --assignee <deploy-app-client-id> --role Contributor `
+      --scope /subscriptions/<sub-id>/resourceGroups/rg-bkdmnl-<env>-sea
+
+The identity itself (Entra app + federated credential for
+`repo:paurodriguez0220/bakedmanila-api:environment:prod`) is also a one-time
+manual creation. After that, all infrastructure changes flow through the
+`infra-bkdmnl` workflow.

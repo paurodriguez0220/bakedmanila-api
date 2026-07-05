@@ -121,6 +121,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: app-bkdmnl-prod-sea
+          resource-group-name: rg-bkdmnl-prod-sea # explicit: the OIDC identity is RG-scoped, no subscription-wide lookup
           package: publish
 
   smoke:
