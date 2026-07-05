@@ -94,7 +94,8 @@ builder.Services.AddIdentityCore<IdentityUser>(options =>
         options.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole>()
-    .AddEntityFrameworkStores<BakedManilaDbContext>();
+    .AddEntityFrameworkStores<BakedManilaDbContext>()
+    .AddDefaultTokenProviders();
 
 var jwtSigningKey = builder.Configuration["Jwt:SigningKey"];
 if (string.IsNullOrEmpty(jwtSigningKey))

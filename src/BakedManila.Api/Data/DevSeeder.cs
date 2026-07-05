@@ -33,6 +33,10 @@ public static class DevSeeder
     /// no admin account should ever be created implicitly. Throws if Identity user
     /// creation fails (e.g. password policy violation) so a misconfigured seed fails
     /// loudly at startup rather than silently leaving prod without an admin account.
+    /// When the admin user already exists, the configured password is compared against
+    /// the stored one and the stored password is reset to match on mismatch — config
+    /// (Key Vault in prod) is the source of truth for the admin password, so rotating
+    /// it only requires updating the secret and restarting.
     /// </summary>
     public static async Task SeedAdminAsync(IServiceProvider scopedServices, IConfiguration config, CancellationToken ct)
     {
@@ -50,10 +54,23 @@ public static class DevSeeder
         }
 
         var users = scopedServices.GetRequiredService<UserManager<IdentityUser>>();
-        if (await users.FindByEmailAsync(email) is not null)
+        var existing = await users.FindByEmailAsync(email);
+        if (existing is not null)
         {
+            // config (Key Vault in prod) is the source of truth for the admin password —
+            // rotate by updating the secret and restarting.
+            if (!await users.CheckPasswordAsync(existing, password))
+            {
+                var resetToken = await users.GeneratePasswordResetTokenAsync(existing);
+                var reset = await users.ResetPasswordAsync(existing, resetToken, password);
+                if (!reset.Succeeded)
+                {
+                    throw new InvalidOperationException(string.Join("; ", reset.Errors.Select(e => e.Description)));
+                }
+            }
             return;
         }
+
         var admin = new IdentityUser { UserName = email, Email = email };
         var created = await users.CreateAsync(admin, password);
         if (!created.Succeeded)
