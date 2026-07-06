@@ -10,6 +10,7 @@ public class BakedManilaDbContext(DbContextOptions<BakedManilaDbContext> options
 {
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<Recipe> Recipes => Set<Recipe>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -75,6 +76,28 @@ public class BakedManilaDbContext(DbContextOptions<BakedManilaDbContext> options
                 .WithMany()
                 .HasForeignKey(i => i.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Recipe>(e =>
+        {
+            e.Property(r => r.Name).HasMaxLength(100).IsRequired();
+            e.Property(r => r.Notes).HasMaxLength(8000);
+            e.HasOne(r => r.Product)
+                .WithMany()
+                .HasForeignKey(r => r.ProductId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(r => r.Ingredients)
+                .WithOne()
+                .HasForeignKey(i => i.RecipeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RecipeIngredient>(e =>
+        {
+            e.ToTable("RecipeIngredients");
+            e.Property(i => i.Name).HasMaxLength(100).IsRequired();
+            e.Property(i => i.Quantity).HasColumnType("decimal(9,2)").IsRequired();
+            e.Property(i => i.Unit).HasMaxLength(20);
         });
     }
 }
