@@ -145,42 +145,25 @@ Storage Blob Data Contributor, a forward-looking grant the app never consumed) h
 been removed for the same reason. Revisit RBAC for both if tenant permissions ever
 allow granting `roleAssignments/write`.
 
-**Third deviation — cost auto-stop needs one manual resource provider registration
-and one manual role grant:** resource provider registration is a subscription-scoped
-action, and the deploy service principal only has Contributor on the resource group —
-so if the subscription has never used Logic Apps before, the first deploy fails with
-`MissingSubscriptionRegistration` for `Microsoft.Logic`. Fix once, per subscription:
-
-    az account set --subscription <sub-id>
-    az provider register --namespace Microsoft.Logic
-    az provider show --namespace Microsoft.Logic --query registrationState -o tsv
-    # re-run the deployment once this shows "Registered" (usually 1-2 minutes)
-
-If the same error appears for `Microsoft.Consumption` (the Budget resource) or
-`Microsoft.Insights` (the Action Group), register that namespace the same way —
-these are commonly pre-registered by default, so `Microsoft.Logic` is the one most
-likely to be missing.
-
+**Third deviation — cost auto-stop needs manual, subscription-scoped setup:**
 `infra/modules/costAutoStopLogicApp.bicep` provisions a Logic App (its own managed
 identity) that the cost Action Group invokes to stop the web app once the monthly
-budget (`infra/modules/budget.bicep`) crosses 100% of `budgetAmount`. Stopping a web
-app is an ARM control-plane operation requiring a role grant (`Website Contributor`)
-on whoever performs it — the same `roleAssignments/write` restriction above means the
-deploy service principal cannot grant this to the Logic App's identity either. Until
-the grant below is applied, the budget and its 80%/100% email alerts still work; only
-the auto-stop HTTP action fails (visible in the Logic App's run history), so skipping
-this step doesn't break the deploy pipeline — it's an enhancement, not a dependency.
+budget (`infra/modules/budget.bicep`) crosses 100% of `budgetAmount`. Two things this
+needs are subscription-scoped actions the RG-scoped deploy identity cannot perform:
+registering the `Microsoft.Logic` resource provider (first-ever Logic App in the
+subscription), and granting the Logic App's identity `Website Contributor` on the web
+app so it can actually call the stop API. Until both are done, the budget and its
+80%/100% email alerts still work; only the auto-stop HTTP action fails (visible in the
+Logic App's run history), so skipping this doesn't break the deploy pipeline — it's an
+enhancement, not a dependency.
 
-One-time, per environment, after the first deploy that creates the Logic App:
+Both steps are scripts, not copy-paste commands — see
+[`docs/runbooks/azure-manual-steps.md`](docs/runbooks/azure-manual-steps.md) for the
+full checklist:
 
-    $logicAppName = az deployment group show --resource-group rg-bkdmnl-prod-sea `
-      --name main --query properties.outputs.costAutoStopLogicAppName.value -o tsv
-    $principalId = az resource show --resource-group rg-bkdmnl-prod-sea `
-      --resource-type Microsoft.Logic/workflows --name $logicAppName `
-      --query identity.principalId -o tsv
-
-    az role assignment create --assignee $principalId --role "Website Contributor" `
-      --scope /subscriptions/<sub-id>/resourceGroups/rg-bkdmnl-prod-sea/providers/Microsoft.Web/sites/app-bkdmnl-prod-sea
+    ./scripts/azure-provision-prerequisites.ps1 -Environment prod -DeployAppClientId <deploy-app-client-id>
+    # ...then, after a deploy with budgetAmount > 0 has created the Logic App:
+    ./scripts/azure-grant-cost-auto-stop-rbac.ps1 -Environment prod
 
 **Budget:** production is capped at $20/month (`budgetAmount` in `prod.bicepparam`) —
 80% actual spend emails `alertEmail`, 100% additionally stops the web app via the
@@ -205,11 +188,16 @@ Groups are billed per execution and this one fires at most a few times a month.
 ### One-time per-environment bootstrap (human, not CI)
 
 The GitHub OIDC identity is granted Contributor **per resource group** (least
-privilege), so a human must create each environment's RG and grant the role once:
+privilege), and a couple of resource-provider registrations are subscription-scoped —
+both are actions the deploy identity cannot perform itself. Run once per environment,
+before its first `infra-bkdmnl` deploy:
 
-    az group create --name rg-bkdmnl-<env>-sea --location southeastasia
-    az role assignment create --assignee <deploy-app-client-id> --role Contributor `
-      --scope /subscriptions/<sub-id>/resourceGroups/rg-bkdmnl-<env>-sea
+    ./scripts/azure-provision-prerequisites.ps1 -Environment <env> -DeployAppClientId <deploy-app-client-id>
+
+See [`docs/runbooks/azure-manual-steps.md`](docs/runbooks/azure-manual-steps.md) for
+the full checklist of every manual, non-CI step this project needs (past and
+pending) — nothing here should ever be a bare copy-paste command; if a new manual
+step is discovered, it gets a script and an entry there.
 
 The identity itself (Entra app + federated credential for
 `repo:paurodriguez0220/bakedmanila-api:environment:prod`) is also a one-time
