@@ -145,7 +145,22 @@ Storage Blob Data Contributor, a forward-looking grant the app never consumed) h
 been removed for the same reason. Revisit RBAC for both if tenant permissions ever
 allow granting `roleAssignments/write`.
 
-**Third deviation — cost auto-stop needs one manual role grant:**
+**Third deviation — cost auto-stop needs one manual resource provider registration
+and one manual role grant:** resource provider registration is a subscription-scoped
+action, and the deploy service principal only has Contributor on the resource group —
+so if the subscription has never used Logic Apps before, the first deploy fails with
+`MissingSubscriptionRegistration` for `Microsoft.Logic`. Fix once, per subscription:
+
+    az account set --subscription <sub-id>
+    az provider register --namespace Microsoft.Logic
+    az provider show --namespace Microsoft.Logic --query registrationState -o tsv
+    # re-run the deployment once this shows "Registered" (usually 1-2 minutes)
+
+If the same error appears for `Microsoft.Consumption` (the Budget resource) or
+`Microsoft.Insights` (the Action Group), register that namespace the same way —
+these are commonly pre-registered by default, so `Microsoft.Logic` is the one most
+likely to be missing.
+
 `infra/modules/costAutoStopLogicApp.bicep` provisions a Logic App (its own managed
 identity) that the cost Action Group invokes to stop the web app once the monthly
 budget (`infra/modules/budget.bicep`) crosses 100% of `budgetAmount`. Stopping a web
