@@ -145,6 +145,33 @@ Storage Blob Data Contributor, a forward-looking grant the app never consumed) h
 been removed for the same reason. Revisit RBAC for both if tenant permissions ever
 allow granting `roleAssignments/write`.
 
+**Third deviation — cost auto-stop needs one manual role grant:**
+`infra/modules/costAutoStopLogicApp.bicep` provisions a Logic App (its own managed
+identity) that the cost Action Group invokes to stop the web app once the monthly
+budget (`infra/modules/budget.bicep`) crosses 100% of `budgetAmount`. Stopping a web
+app is an ARM control-plane operation requiring a role grant (`Website Contributor`)
+on whoever performs it — the same `roleAssignments/write` restriction above means the
+deploy service principal cannot grant this to the Logic App's identity either. Until
+the grant below is applied, the budget and its 80%/100% email alerts still work; only
+the auto-stop HTTP action fails (visible in the Logic App's run history), so skipping
+this step doesn't break the deploy pipeline — it's an enhancement, not a dependency.
+
+One-time, per environment, after the first deploy that creates the Logic App:
+
+    $logicAppName = az deployment group show --resource-group rg-bkdmnl-prod-sea `
+      --name main --query properties.outputs.costAutoStopLogicAppName.value -o tsv
+    $principalId = az resource show --resource-group rg-bkdmnl-prod-sea `
+      --resource-type Microsoft.Logic/workflows --name $logicAppName `
+      --query identity.principalId -o tsv
+
+    az role assignment create --assignee $principalId --role "Website Contributor" `
+      --scope /subscriptions/<sub-id>/resourceGroups/rg-bkdmnl-prod-sea/providers/Microsoft.Web/sites/app-bkdmnl-prod-sea
+
+**Budget:** production is capped at $20/month (`budgetAmount` in `prod.bicepparam`) —
+80% actual spend emails `alertEmail`, 100% additionally stops the web app via the
+mechanism above. Disabled for other environments (`budgetAmount` defaults to `0`,
+which skips the budget/action-group/Logic App deployment entirely).
+
 **Task-7 runbook note:** on first provision, App Service application settings can
 briefly serve unresolved `@Microsoft.KeyVault(SecretUri=...)` references if the app
 starts before the Key Vault access policy grant (secrets `get`/`list` for the app's
@@ -156,7 +183,9 @@ in effect.
 **Cost:** roughly $13–15/month per environment — App Service B1 (~$13/mo), SQL
 serverless with auto-pause after 60 minutes idle (near-$0 when idle, ~$0.50–1/mo for a
 low-traffic storefront), Storage/Key Vault/Application Insights/Log Analytics (all
-consumption-based, cents/month at this scale).
+consumption-based, cents/month at this scale). The cost auto-stop resources (Logic App,
+Action Group, Budget) add negligible cost — Consumption-plan Logic Apps and Action
+Groups are billed per execution and this one fires at most a few times a month.
 
 ### One-time per-environment bootstrap (human, not CI)
 

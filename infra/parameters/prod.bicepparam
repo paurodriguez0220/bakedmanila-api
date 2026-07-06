@@ -6,6 +6,8 @@ param sku = 'B1'
 param adminEmail = 'admin@bakedmanila.com'
 param emailFrom = ''
 param emailTo = ''
+param budgetAmount = 20
+param alertEmail = 'paurodriguez0220@gmail.com'
 
 // Empty default is load-bearing: an env var left unset means the corresponding
 // Key Vault secret write is skipped rather than writing a blank value.

@@ -32,6 +32,12 @@ param adminPassword string = ''
 @secure()
 param acsEmailConnectionString string = ''
 
+@description('Monthly budget in USD for this resource group. 80% triggers an email alert; 100% auto-stops the web app. Zero disables the budget entirely.')
+param budgetAmount int = 0
+
+@description('Email address for budget alerts and the auto-stop trigger. Required when budgetAmount > 0.')
+param alertEmail string = ''
+
 // Region is hardcoded per app, not parameterized — see standards-docs/azure-infra.md.
 // Resource-group-scoped deployment (default scope) — the resource group itself is
 // created by the workflow before this deployment runs (see infra-bkdmnl.yml), so the
@@ -147,5 +153,44 @@ module keyVaultAccessPolicy 'modules/keyVaultAccessPolicy.bicep' = {
   }
 }
 
+// Cost auto-stop (opt-in via budgetAmount). The Logic App's managed identity needs a
+// Website Contributor grant on the web app to actually stop it — the deploy service
+// principal cannot create that role assignment (same tenant restriction documented
+// above for Key Vault), so it is granted once, manually, by the subscription Owner.
+// See README.md ("cost auto-stop needs one manual role grant") for the exact command.
+// Until that grant exists, the budget and email alerts still work; only the auto-stop
+// call will fail silently (Logic App run history will show the failed HTTP action).
+module costAutoStopLogicApp 'modules/costAutoStopLogicApp.bicep' = if (budgetAmount > 0) {
+  name: 'costAutoStopLogicApp'
+  params: {
+    appName: appName
+    env: env
+    location: location
+    webAppName: webApp.outputs.name
+  }
+}
+
+module costActionGroup 'modules/costActionGroup.bicep' = if (budgetAmount > 0) {
+  name: 'costActionGroup'
+  params: {
+    appName: appName
+    env: env
+    alertEmail: alertEmail
+    logicAppName: costAutoStopLogicApp.?outputs.name ?? ''
+  }
+}
+
+module budget 'modules/budget.bicep' = if (budgetAmount > 0) {
+  name: 'budget'
+  params: {
+    appName: appName
+    env: env
+    budgetAmount: budgetAmount
+    alertEmail: alertEmail
+    actionGroupId: costActionGroup.?outputs.id ?? ''
+  }
+}
+
 output webAppName string = webApp.outputs.name
 output defaultHostName string = webApp.outputs.defaultHostName
+output costAutoStopLogicAppName string = costAutoStopLogicApp.?outputs.name ?? ''
