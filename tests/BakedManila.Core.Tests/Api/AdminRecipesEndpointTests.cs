@@ -151,5 +151,44 @@ public sealed class AdminRecipesEndpointTests : IAsyncLifetime
         var anonymous = _factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/recipes")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/admin/recipes", ValidRecipe())).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/recipes/1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PutAsJsonAsync("/api/admin/recipes/1", ValidRecipe())).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.DeleteAsync("/api/admin/recipes/1")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_Returns400_ForUnknownProductId()
+    {
+        // Create a recipe first
+        var created = await _client.PostAsJsonAsync("/api/admin/recipes", ValidRecipe());
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var recipe = await created.Content.ReadFromJsonAsync<AdminRecipeDto>();
+
+        // Try to update with unknown productId
+        var response = await _client.PutAsJsonAsync($"/api/admin/recipes/{recipe!.Id}", ValidRecipe(productId: 999_999));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_NormalizesBlankUnitToNull()
+    {
+        var recipeWithBlankUnit = new
+        {
+            name = "Blank Unit Recipe",
+            yieldPerBatch = 8,
+            notes = "Test",
+            productId = (int?)null,
+            ingredients = new object[]
+            {
+                new { name = "Flour", quantity = 250m, unit = " " },
+            },
+        };
+
+        var created = await _client.PostAsJsonAsync("/api/admin/recipes", recipeWithBlankUnit);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var recipe = await created.Content.ReadFromJsonAsync<AdminRecipeDto>();
+
+        var ingredient = Assert.Single(recipe!.Ingredients);
+        Assert.Null(ingredient.Unit);
     }
 }
