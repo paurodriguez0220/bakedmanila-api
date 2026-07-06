@@ -134,6 +134,7 @@ if (builder.Environment.IsDevelopment())
 
 builder.Services.AddScoped<IProductRepository, EfProductRepository>();
 builder.Services.AddScoped<IOrderRepository, EfOrderRepository>();
+builder.Services.AddScoped<IRecipeRepository, EfRecipeRepository>();
 builder.Services.AddScoped<IPaymentMethod, ManualPayment>();
 
 var emailConnectionString = builder.Configuration["Email:ConnectionString"];
